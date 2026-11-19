@@ -110,7 +110,9 @@ async function start(){
   $('reader').classList.add('hidden');$('status').classList.add('hidden');
   $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
   window.scrollTo({top:0,behavior:'smooth'});
-  const sent=sendToHome();status(sent?'読み取り成功。ホームへ問題コードを送信しました（受信完了は未確認）。':'QR読み取り成功。ただしホームに送信できませんでした。',!sent);
+  // 読み取り時に opener 通信を試して接続エラーを出さない。
+  // 回数消費と画像表示は、ユーザーが「ヒントを表示」を押してからホーム側で行う。
+  status('読み取り完了。「ヒントを表示」を押してください。');
  },()=>{});
  if(!scanned)status('カメラを問題用QRコードに向けてください。');
  }catch(e){status('カメラを起動できませんでした。',true);errorModal('原因：カメラを開始できません。','カメラの権限、他アプリで使用中でないこと、HTTPS接続を確認してください。詳細：'+(e?.message||String(e)));$('retry').classList.remove('hidden');}
