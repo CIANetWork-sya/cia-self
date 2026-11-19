@@ -44,7 +44,7 @@ button.secondary{background:#f7f0e2;color:#302521;border-color:#776355}
 <button id="retry" class="secondary hidden" type="button">もう一度読み取る</button>
 <section id="result" class="hidden">
 <strong>読み取り完了</strong><p id="decoded"></p>
-<p>「ヒントを表示」を押すと、ホームで使用確認に進みます。読み取っただけでは使用回数は減りません。</p>
+<p>ホームで使用確認に進みます。QRを読み取っただけでは使用回数は減りません。</p>
 <button id="back" type="button">ヒントを表示</button>
 <p class="tiny">自動で切り替わらない場合はブラウザのタブ一覧から「ホーム」を選んでください。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
@@ -66,6 +66,28 @@ function status(text,isError=false){$('status').textContent=text;$('status').cla
 function errorModal(cause,detail){$('cause').textContent=cause;$('detail').textContent=detail;$('errorCopy').disabled=!lastValue;$('overlay').classList.remove('hidden');$('overlay').focus();}
 function closeModal(){$('overlay').classList.add('hidden');}
 async function stop(){if(!reader)return;let old=reader;reader=null;try{if(old.isScanning)await old.stop();}catch(e){}try{old.clear();}catch(e){}}
+// GASのホームへ戻るURLはURLフラグメントにだけ保持（公開ページへのHTTP要求に含まれない）。
+function getHomeUrl(){
+ try{
+  const raw=new URLSearchParams(location.hash.slice(1)).get('return');
+  if(!raw)return null;
+  const url=new URL(raw);
+  if(url.protocol!=='https:'||url.hostname!=='script.google.com'||
+     !/^\/macros\/s\/[^/]+\/exec$/.test(url.pathname)||
+     !/^(?:[A-H]-[1-6]|I-[1-3])$/.test(url.searchParams.get('team')||'')||
+     !/^[a-f0-9]{64}$/i.test(url.searchParams.get('key')||''))return null;
+  return url;
+ }catch(e){return null;}
+}
+function navigateHome(withQuestion){
+ const home=getHomeUrl();
+ if(!home)return false;
+ if(withQuestion && lastValue)home.searchParams.set('question',lastValue);
+ else home.searchParams.delete('question');
+ // openerに依存せず、同じタブでホームへ戻す。
+ window.location.assign(home.href);
+ return true;
+}
 function sendToHome(){
  if(!window.opener){errorModal('原因：ホームとのタブ接続がありません。','このブラウザはQRリーダーを開くとき、ホームとの接続情報（window.opener）を引き継いでいません。Google Apps Scriptの埋め込み表示・ブラウザのタブ保護設定などが考えられます。ブラウザのタブ一覧からホームに戻ってください。');return false;}
  try{if(window.opener.closed){errorModal('原因：ホームのタブが閉じています。','QRコードを送信する先がありません。班専用ログインQRからホームを開き直してください。');return false;}}
@@ -84,13 +106,16 @@ async function start(){
   if(!match){status('THEMISの問題用QRコードではありません。別のQRを映してください。',true);return;}
   scanned=true;lastValue='THEMIS:Q'+match[1];await stop();
   $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
-  const sent=sendToHome();status(sent?'読み取り成功。ホームへ問題コードを送信しました（受信完了は未確認）。':'QR読み取り成功。ただしホームに送信できませんでした。',!sent);
+  if(getHomeUrl()){status('読み取り成功。ホームでヒントの確認画面を開きます…');navigateHome(true);return;}
+  if(window.opener){const sent=sendToHome();status(sent?'読み取り成功。ホームに結果を送信しました。':'読み取り成功。ただしホームへ結果を送信できませんでした。',!sent);}
+  else status('読み取り成功。単独テストではホームへの自動転送は行われません。');
  },()=>{});
  if(!scanned)status('カメラを問題用QRコードに向けてください。');
  }catch(e){status('カメラを起動できませんでした。',true);errorModal('原因：カメラを開始できません。','カメラの権限、他アプリで使用中でないこと、HTTPS接続を確認してください。詳細：'+(e?.message||String(e)));$('retry').classList.remove('hidden');}
  finally{busy=false;}
 }
 $('homeNav').addEventListener('click',()=>{
+ if(navigateHome(false))return;
  // 元ページに接続できる場合はそのタブを前面へ。
  if(window.opener){
   try{
@@ -112,7 +137,7 @@ $('homeNav').addEventListener('click',()=>{
  errorModal('原因：ホームへの接続情報がありません。','この端末ではQRリーダーを別タブで開くと元のホームとの接続が切れる場合があります。Chromeのタブ一覧（四角い数字のアイコン）から、元のGoogle Apps Scriptのホームを選んでください。');
 });
 $('retry').addEventListener('click',start);
-$('back').addEventListener('click',()=>{if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームに送信しました。画面が切り替わらない場合はタブ一覧からホームを選んでください。');}});
+$('back').addEventListener('click',()=>{if(navigateHome(true))return;if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームに送信しました。画面が切り替わらない場合はタブ一覧からホームを選んでください。');}});
 async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
 $('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
 window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',start);
