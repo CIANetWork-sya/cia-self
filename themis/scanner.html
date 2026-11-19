@@ -45,7 +45,7 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 <strong>読み取り完了</strong><p id="decoded"></p>
 <p>「ヒントを表示」を押すと、初めて見る問題は残り回数を1回使い、ホームでヒント画像が開きます。同じ問題の再表示では回数は減りません。</p>
 <a id="back" class="nav-action" href="#">ヒントを表示</a>
-<p class="tiny">戻り先は班番号と残り回数が表示されるホームです。</p>
+<p class="tiny">班専用ホームで「QRコードをスキャンする」を押して開いた場合、ヒント画像の画面に進みます。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
 </section>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
@@ -55,7 +55,7 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 </main>
 <div id="overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="title" aria-describedby="cause detail" tabindex="-1">
 <div class="dialog"><p class="label">CONNECTION ERROR / 接続エラー</p>
-<h2 id="title">ホームに接続できません</h2>
+<h2 id="title">QRリーダーのお知らせ</h2>
 <div id="cause"></div><p id="detail"></p>
 <p class="tiny">QRコードの読み取りは成功しています。ヒントはまだ使用していません。</p>
 <button id="errorCopy">問題コードをコピー</button><button class="secondary" id="errorClose">エラーを閉じる</button></div>
@@ -98,13 +98,6 @@ function navigateHome(includeQuestion){
  location.assign(home.href);
  return true;
 }
-function sendToHome(){
- if(!window.opener){errorModal('原因：ホームとのタブ接続がありません。','このブラウザはQRリーダーを開くとき、ホームとの接続情報（window.opener）を引き継いでいません。Google Apps Scriptの埋め込み表示・ブラウザのタブ保護設定などが考えられます。ブラウザのタブ一覧からホームに戻ってください。');return false;}
- try{if(window.opener.closed){errorModal('原因：ホームのタブが閉じています。','QRコードを送信する先がありません。班専用ログインQRからホームを開き直してください。');return false;}}
- catch(e){errorModal('原因：ホームのタブ状態を確認できません。','ブラウザがタブ間のアクセスを制限しています。詳細：'+String(e));return false;}
- try{window.opener.postMessage({type:'THEMIS_QR_SCANNED',value:lastValue},'*');return true;}
- catch(e){errorModal('原因：ホームへのメッセージ送信に失敗しました。','ブラウザのタブ間通信が失敗しました。詳細：'+String(e));return false;}
-}
 async function start(){
  if(busy)return;busy=true;scanned=false;lastValue='';closeModal();$('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').classList.add('hidden');$('result').classList.add('hidden');$('decoded').textContent='';status('カメラを起動しています…');
  try{
@@ -129,14 +122,18 @@ async function start(){
 $('retry').addEventListener('click',start);
 $('back').addEventListener('click',event=>{
  if(!lastValue){event.preventDefault();return;}
- // 「ヒントを表示」で読み取り結果を渡す。
+ // 必ず問題番号入りの班専用ホームURLに移動。戻り先が無い場合は正しい操作を案内。
  if(setHomeLinks())return;
  event.preventDefault();
- // 古いホームで開いたケースは互換性のため送信だけ試みる。
- if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームへ問題コードを送信しました。');}
+ status('班専用ホームからQRリーダーを開き直してください。今のリーダーには戻り先が設定されていません。',true);
+ $('back').removeAttribute('href');
 });
 async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
 $('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
-window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',()=>{setHomeLinks();start();});
+window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',()=>{
+ const ready=setHomeLinks();
+ if(!ready)status('このQRリーダーは班専用ホームから開いてください。直接開いた場合、ヒント画像へは進めません。',true);
+ start();
+});
 </script>
 </body></html>
