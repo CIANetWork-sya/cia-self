@@ -43,9 +43,9 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 <p>カメラをQRコードに向けると、自動で読み取ります。写真を撮る必要はありません。</p>
 <section id="result" class="hidden">
 <strong>読み取り完了</strong><p id="decoded"></p>
-<p>「ヒントを表示」を押すと、初めて見る問題は残り回数を1回使い、ホームでヒント画像が開きます。同じ問題の再表示では回数は減りません。</p>
+<p>「ヒントを表示」で元のTHEMIS画面に戻り、ヒントの使用を確認してください。読み取っただけでは回数は減りません。</p>
 <a id="back" class="nav-action" href="#">ヒントを表示</a>
-<p class="tiny">班専用ホームで「QRコードをスキャンする」を押して開いた場合、ヒント画像の画面に進みます。</p>
+<p class="tiny">自動で切り替わらない場合は、ブラウザのタブ一覧から元のTHEMIS画面を選んでください。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
 </section>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
@@ -64,76 +64,41 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 'use strict';
 const $=id=>document.getElementById(id);
 let reader=null,busy=false,scanned=false,lastValue='';
-function status(text,isError=false){$('status').textContent=text;$('status').className='status'+(isError?' error':'');}
-function errorModal(cause,detail){$('cause').textContent=cause;$('detail').textContent=detail;$('errorCopy').disabled=!lastValue;$('overlay').classList.remove('hidden');$('overlay').focus();}
-function closeModal(){$('overlay').classList.add('hidden');}
-async function stop(){if(!reader)return;let old=reader;reader=null;try{if(old.isScanning)await old.stop();}catch(e){}try{old.clear();}catch(e){}}
-// ホームが渡してきた班専用URLはハッシュから読み込む。クエリでは送信しない。
-function getHomeUrl(){
- try{
-  const encoded=new URLSearchParams(location.hash.slice(1)).get('return');
-  if(!encoded)return null;
-  const url=new URL(encoded);
-  if(url.protocol!=='https:'||url.hostname!=='script.google.com'||
-    !/^\/macros\/s\/[^/]+\/exec$/.test(url.pathname)||
-    !/^(?:[A-H]-[1-6]|I-[1-3])$/.test(url.searchParams.get('team')||'')||
-    !/^[a-f0-9]{64}$/i.test(url.searchParams.get('key')||''))return null;
-  return url;
- }catch(e){return null;}
-}
-// 「ヒントを表示」は標準のリンクとしてホームへ移動（JSナビゲーションだけに依存しない）。
-function setHomeLinks(){
- const home=getHomeUrl();
- if(!home)return false;
- home.searchParams.delete('question');
- if(lastValue)home.searchParams.set('question',lastValue);
- $('back').href=home.href;
- return true;
-}
-function navigateHome(includeQuestion){
- const home=getHomeUrl();
- if(!home)return false;
- home.searchParams.delete('question');
- if(includeQuestion && lastValue)home.searchParams.set('question',lastValue);
- location.assign(home.href);
- return true;
-}
+function status(s,error=false){$('status').textContent=s;$('status').className='status'+(error?' error':'');}
+async function stop(){if(!reader)return;const current=reader;reader=null;try{if(current.isScanning)await current.stop();}catch(e){}try{current.clear();}catch(e){}}
+function sendToThemis(){if(window.opener&&!window.opener.closed){window.opener.postMessage({type:'THEMIS_QR_SCANNED',value:lastValue},'*');return true;}return false;}
 async function start(){
- if(busy)return;busy=true;scanned=false;lastValue='';closeModal();$('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').classList.add('hidden');$('result').classList.add('hidden');$('decoded').textContent='';status('カメラを起動しています…');
+ if(busy)return;busy=true;scanned=false;lastValue='';
+ $('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').classList.add('hidden');$('result').classList.add('hidden');$('decoded').textContent='';
+ status('カメラを起動しています…');
  try{
- if(typeof Html5Qrcode==='undefined')throw Error('QR読み取りライブラリを読み込めませんでした。');
- await stop();reader=new Html5Qrcode('reader',{verbose:false});
- await reader.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>{const side=Math.max(150,Math.min(260,Math.floor(Math.min(w,h)*.78)));return {width:side,height:side};}},async value=>{
-  if(scanned)return;
-  const match=/^(?:THEMIS:)?Q(0[1-9]|1[0-5])$/i.exec(String(value).trim());
-  if(!match){status('THEMISの問題用QRコードではありません。別のQRを映してください。',true);return;}
-  scanned=true;lastValue='THEMIS:Q'+match[1];await stop();setHomeLinks();
-  $('reader').classList.add('hidden');$('status').classList.add('hidden');
-  $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
-  window.scrollTo({top:0,behavior:'smooth'});
-  // 読み取り直後は移動せず、ヒントを表示でホームへ戻す。
-  // 回数消費と画像表示は、ユーザーが「ヒントを表示」を押してからホーム側で行う。
-  status('読み取り完了。「ヒントを表示」を押してください。');
- },()=>{});
- if(!scanned)status('カメラを問題用QRコードに向けてください。');
- }catch(e){status('カメラを起動できませんでした。',true);errorModal('原因：カメラを開始できません。','カメラの権限、他アプリで使用中でないこと、HTTPS接続を確認してください。詳細：'+(e?.message||String(e)));$('retry').classList.remove('hidden');}
+  if(typeof Html5Qrcode==='undefined')throw Error('QR読み取りライブラリを読み込めませんでした。');
+  await stop();
+  reader=new Html5Qrcode('reader',{verbose:false});
+  await reader.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>{const side=Math.max(150,Math.min(260,Math.floor(Math.min(w,h)*.78)));return{width:side,height:side};}},
+   async value=>{
+    if(scanned)return;
+    const m=/^(?:THEMIS:)?Q(0[1-9]|1[0-5])$/i.exec(String(value).trim());
+    if(!m){status('THEMISの問題用QRコードではありません。別のコードを映してください。',true);return;}
+    scanned=true;lastValue='THEMIS:Q'+m[1];await stop();
+    $('reader').classList.add('hidden');$('status').classList.add('hidden');
+    $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
+    window.scrollTo({top:0,behavior:'smooth'});
+    const sent=sendToThemis();
+    status(sent?'読み取り成功。元のTHEMIS画面に問題を送りました。':'読み取り成功。元のTHEMIS画面に戻ってください。');
+   },()=>{});
+  if(!scanned)status('カメラを問題用QRコードに向けてください。');
+ }catch(e){status('カメラを開始できませんでした。ブラウザでカメラを許可してください。詳細：'+(e?.message||String(e)),true);$('retry').classList.remove('hidden');}
  finally{busy=false;}
 }
 $('retry').addEventListener('click',start);
-$('back').addEventListener('click',event=>{
- if(!lastValue){event.preventDefault();return;}
- // 必ず問題番号入りの班専用ホームURLに移動。戻り先が無い場合は正しい操作を案内。
- if(setHomeLinks())return;
- event.preventDefault();
- status('班専用ホームからQRリーダーを開き直してください。今のリーダーには戻り先が設定されていません。',true);
- $('back').removeAttribute('href');
+$('back').addEventListener('click',event=>{event.preventDefault();
+ const sent=sendToThemis();
+ if(sent){try{window.opener.focus();}catch(e){}try{window.close();}catch(e){}status('元のTHEMIS画面に戻ってヒントの使用を確認してください。');}
+ else status('元のTHEMISタブに戻ってください。タブ間連携が利用できない場合は運営スタッフに確認してください。',true);
 });
-async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
-$('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
-window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',()=>{
- const ready=setHomeLinks();
- if(!ready)status('このQRリーダーは班専用ホームから開いてください。直接開いた場合、ヒント画像へは進めません。',true);
- start();
-});
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(lastValue);status('問題コードをコピーしました。');}catch(e){status('コピーに失敗しました。表示された問題コードを長押ししてコピーしてください。',true);}});
+window.addEventListener('pagehide',()=>{void stop();});
+window.addEventListener('load',start);
 </script>
 </body></html>
