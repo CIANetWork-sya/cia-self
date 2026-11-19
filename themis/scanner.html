@@ -129,17 +129,17 @@ async function start(){
  finally{busy=false;}
 }
 $('homeNav').addEventListener('click',event=>{
- event.preventDefault();
  if(setHomeLinks())return;
+ event.preventDefault();
  if(window.opener && !window.opener.closed){try{window.opener.focus();}catch(e){}return;}
  errorModal('ホームのURLがありません','班専用QRからホームを開き、ホームの「QRコードをスキャンする」を押して起動してください。');
 });
 $('retry').addEventListener('click',start);
 $('back').addEventListener('click',event=>{
- event.preventDefault();
- if(!lastValue)return;
- // 「ヒントを表示」の操作でのみ問題ID付きのホームURLへ移動する。
+ if(!lastValue){event.preventDefault();return;}
+ // 「ヒントを表示」で読み取り結果を渡す。
  if(setHomeLinks())return;
+ event.preventDefault();
  // 古いホームで開いたケースは互換性のため送信だけ試みる。
  if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームへ問題コードを送信しました。');}
 });
