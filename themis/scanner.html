@@ -82,6 +82,16 @@ function getHomeUrl(){
   return url;
  }catch(e){return null;}
 }
+// 「ヒントを表示」は標準のリンクとしてホームへ移動（JSナビゲーションだけに依存しない）。
+function setHomeLinks(){
+ const home=getHomeUrl();
+ if(!home)return false;
+ home.searchParams.delete('question');
+ $('homeNav').href=home.href;
+ if(lastValue)home.searchParams.set('question',lastValue);
+ $('back').href=home.href;
+ return true;
+}
 function navigateHome(includeQuestion){
  const home=getHomeUrl();
  if(!home)return false;
@@ -106,11 +116,11 @@ async function start(){
   if(scanned)return;
   const match=/^(?:THEMIS:)?Q(0[1-9]|1[0-5])$/i.exec(String(value).trim());
   if(!match){status('THEMISの問題用QRコードではありません。別のQRを映してください。',true);return;}
-  scanned=true;lastValue='THEMIS:Q'+match[1];await stop();
+  scanned=true;lastValue='THEMIS:Q'+match[1];await stop();setHomeLinks();
   $('reader').classList.add('hidden');$('status').classList.add('hidden');
   $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
   window.scrollTo({top:0,behavior:'smooth'});
-  // 読み取り時に opener 通信を試して接続エラーを出さない。
+  // 読み取り直後は移動せず、ヒントを表示でホームへ戻す。
   // 回数消費と画像表示は、ユーザーが「ヒントを表示」を押してからホーム側で行う。
   status('読み取り完了。「ヒントを表示」を押してください。');
  },()=>{});
@@ -120,7 +130,7 @@ async function start(){
 }
 $('homeNav').addEventListener('click',event=>{
  event.preventDefault();
- if(navigateHome(false))return;
+ if(setHomeLinks())return;
  if(window.opener && !window.opener.closed){try{window.opener.focus();}catch(e){}return;}
  errorModal('ホームのURLがありません','班専用QRからホームを開き、ホームの「QRコードをスキャンする」を押して起動してください。');
 });
@@ -129,12 +139,12 @@ $('back').addEventListener('click',event=>{
  event.preventDefault();
  if(!lastValue)return;
  // 「ヒントを表示」の操作でのみ問題ID付きのホームURLへ移動する。
- if(navigateHome(true))return;
+ if(setHomeLinks())return;
  // 古いホームで開いたケースは互換性のため送信だけ試みる。
  if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームへ問題コードを送信しました。');}
 });
 async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
 $('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
-window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',start);
+window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',()=>{setHomeLinks();start();});
 </script>
 </body></html>
