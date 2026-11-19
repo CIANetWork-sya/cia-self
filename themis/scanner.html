@@ -43,7 +43,7 @@ button.secondary{background:#f7f0e2;color:#302521;border-color:#776355}
 <p>カメラをQRコードに向けると、自動で読み取ります。写真を撮る必要はありません。</p>
 <section id="result" class="hidden">
 <strong>読み取り完了</strong><p id="decoded"></p>
-<p>ホームで使用確認に進みます。QRを読み取っただけでは使用回数は減りません。</p>
+<p>「ヒントを表示」で、残り回数とQRスキャンボタンがある最初の画面（ホーム）に戻ります。そこで使用確認後に画像を開けます。</p>
 <button id="back" type="button">ヒントを表示</button>
 <p class="tiny">自動で切り替わらない場合はブラウザのタブ一覧から「ホーム」を選んでください。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
@@ -147,7 +147,19 @@ $('back').addEventListener('click',()=>{
   status('ホームに送信しました。画面が切り替わらない場合はタブ一覧からホームを選んでください。');
   return;
  }
- if(!window.opener)errorModal('原因：ホームへの戻り先がありません。','ホームのQRスキャンボタンから起動してください。GitHubのQRリーダーだけを直接開いても、班のログイン先が分からないためヒントを表示できません。');
+ if(!window.opener){
+  // ホームURLを受け取れなかった場合は、ブラウザの直前のページに戻すことを試みる。
+  // この経路では問題番号を渡せないので、それを明示する。
+  const ref=document.referrer;
+  try{
+   const prev=ref?new URL(ref):null;
+   if(prev && prev.hostname==='script.google.com'){
+    errorModal('原因：ホームのURLがスキャナーに渡っていません。','このまま戻ると読み取った問題を引き継げません。ホームのIndex.htmlを最新版に更新して再デプロイし、ホームのQRスキャンボタンから開き直してください。');
+    return;
+   }
+  }catch(e){}
+  errorModal('原因：ホームのURLが登録されていません。','最初の「残り使用回数」と「QRコードをスキャンする」が表示された画面からQRリーダーを開いてください。GitHubのQRリーダーだけを直接開くとログイン先が分からず、ヒント表示に進めません。');
+ }
 });
 async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
 $('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
