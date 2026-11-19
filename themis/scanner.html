@@ -26,17 +26,17 @@ button{display:block;width:100%;min-height:52px;padding:12px;border:0;border-rad
 <main>
 <header>THEMIS</header>
 <h1>問題のQRコードを読み取る</h1>
-<p>カメラをQRコードに向けると自動で読み取ります。写真を撮る必要はありません。</p>
+<p>問題用QRコードをカメラに向けてください。読み取るだけでTHEMISに問題番号を送信します。写真を撮る必要はありません。</p>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
 <div id="reader"></div>
 <button id="retry" class="secondary hidden" type="button">もう一度読み取る</button>
 <div id="result" class="hidden">
 <strong>読み取り完了</strong>
-<p>元のTHEMIS画面に戻って「ヒントを確認する」を押してください。</p>
+<p>THEMISに問題番号を送信しました。元の画面に戻るとヒントの確認画面が表示されます。</p>
 <button id="back" type="button">THEMISに戻る</button>
-<p class="tiny">元の画面に自動で反映されない場合は、読み取ったURLをコピーして入力してください。</p>
+<p class="tiny">元の画面に自動で反映されない場合は、問題コードをコピーしてTHEMISの入力欄に貼り付けてください。</p>
 <p id="decoded" class="tiny"></p>
-<button id="copy" class="secondary" type="button">読み取り結果をコピー</button>
+<button id="copy" class="secondary" type="button">問題コードをコピー</button>
 </div>
 <p class="tiny">カメラ映像はQRコードの読み取りだけに使い、このページでは保存しません。カメラの許可を求められたら「許可」を選んでください。</p>
 </main>
@@ -68,18 +68,20 @@ async function start(){
       async value=>{
         if(scanned)return;
         const candidate=String(value).trim();
-        if(!/^https:\/\/[^\s]+$/i.test(candidate)||candidate.length>4096){
-          status('ヒントURLではないQRコードです。別のコードを映してください。',true);
+        const m=/^(?:THEMIS:)?Q(0[1-9]|1[0-5])$/i.exec(candidate);
+        if(!m){
+          status('THEMISの問題用QRコードではありません。別のQRコードを映してください。',true);
           return;
         }
-        scanned=true;lastValue=candidate;
+        scanned=true;lastValue='THEMIS:Q'+m[1];
         await stop();
         $('retry').classList.remove('hidden');
         $('result').classList.remove('hidden');
         $('decoded').textContent=lastValue;
-        status('読み取り成功。THEMISの画面に結果を送りました。');
+        status('読み取り成功：'+lastValue+'。THEMISに戻って確認してください。');
         if(window.opener&&!window.opener.closed){
           window.opener.postMessage({type:'THEMIS_QR_SCANNED',value:lastValue},'*');
+          try{window.opener.focus();}catch(e){}
         }
       },
       ()=>{}
