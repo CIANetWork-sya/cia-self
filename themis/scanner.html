@@ -50,7 +50,7 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 </section>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
 <div id="reader"></div>
-<button id="retry" class="secondary hidden" type="button">もう一度読み取る</button>
+<button id="retry" class="secondary" type="button">カメラを起動・再試行</button>
 <p class="tiny">ブラウザからカメラの許可を求められたら「許可」を選んでください。カメラ映像は保存しません。</p>
 </main>
 <div id="overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="title" aria-describedby="cause detail" tabindex="-1">
@@ -69,13 +69,16 @@ async function stop(){if(!reader)return;const current=reader;reader=null;try{if(
 function sendToThemis(){if(window.opener&&!window.opener.closed){window.opener.postMessage({type:'THEMIS_QR_SCANNED',value:lastValue},'*');return true;}return false;}
 async function start(){
  if(busy)return;busy=true;scanned=false;lastValue='';
- $('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').classList.add('hidden');$('result').classList.add('hidden');$('decoded').textContent='';
+ $('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').disabled=true;$('retry').textContent='カメラを準備中…';$('result').classList.add('hidden');$('decoded').textContent='';
  status('カメラを起動しています…');
  try{
   if(typeof Html5Qrcode==='undefined')throw Error('QR読み取りライブラリを読み込めませんでした。');
   await stop();
   reader=new Html5Qrcode('reader',{verbose:false});
-  await reader.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>{const side=Math.max(150,Math.min(260,Math.floor(Math.min(w,h)*.78)));return{width:side,height:side};}},
+  const config={fps:10,qrbox:(w,h)=>{const side=Math.max(150,Math.min(260,Math.floor(Math.min(w,h)*.78)));return{width:side,height:side};}};
+  let started=false;
+  // まず背面カメラ。端末がfacingModeをサポートしない場合は、実在のカメラIDで再試行。
+  const onDecoded=
    async value=>{
     if(scanned)return;
     const m=/^(?:THEMIS:)?Q(0[1-9]|1[0-5])$/i.exec(String(value).trim());
@@ -86,10 +89,25 @@ async function start(){
     window.scrollTo({top:0,behavior:'smooth'});
     const sent=sendToThemis();
     status(sent?'読み取り成功。元のTHEMIS画面に問題を送りました。':'読み取り成功。元のTHEMIS画面に戻ってください。');
-   },()=>{});
-  if(!scanned)status('カメラを問題用QRコードに向けてください。');
- }catch(e){status('カメラを開始できませんでした。ブラウザでカメラを許可してください。詳細：'+(e?.message||String(e)),true);$('retry').classList.remove('hidden');}
- finally{busy=false;}
+   };
+  try {
+    await reader.start({facingMode:'environment'},config,onDecoded,()=>{});
+    started=true;
+  } catch(cameraError){
+    const name=String(cameraError?.name||'');
+    const message=String(cameraError?.message||cameraError);
+    if(/NotAllowedError|Permission denied|SecurityError/i.test(name+' '+message))throw cameraError;
+    const cameras=await Html5Qrcode.getCameras();
+    if(!cameras?.length)throw cameraError;
+    const camera=cameras.find(c=>/back|rear|environment|背面|外側/i.test(c.label||''))||cameras[cameras.length-1];
+    try{if(reader)reader.clear();}catch(_){}
+    reader=new Html5Qrcode('reader',{verbose:false});
+    await reader.start(camera.id,config,onDecoded,()=>{});
+    started=true;
+  }
+  if(started&&!scanned)status('カメラが起動しました。問題用QRコードを枠の中に映してください。');
+ }catch(e){const detail=e?.message||String(e);status('カメラが起動できません。ブラウザのカメラ許可を確認して「カメラを起動・再試行」を押してください。詳細：'+detail,true);}
+ finally{busy=false;$('retry').disabled=false;$('retry').textContent='カメラを起動・再試行';}
 }
 $('retry').addEventListener('click',start);
 $('back').addEventListener('click',event=>{event.preventDefault();
@@ -99,6 +117,6 @@ $('back').addEventListener('click',event=>{event.preventDefault();
 });
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(lastValue);status('問題コードをコピーしました。');}catch(e){status('コピーに失敗しました。表示された問題コードを長押ししてコピーしてください。',true);}});
 window.addEventListener('pagehide',()=>{void stop();});
-window.addEventListener('load',start);
+window.addEventListener('load',()=>{status('「カメラを起動・再試行」を押してカメラを開始してください。');});
 </script>
 </body></html>
