@@ -44,9 +44,9 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 <p>カメラをQRコードに向けると、自動で読み取ります。写真を撮る必要はありません。</p>
 <section id="result" class="hidden">
 <strong>読み取り完了</strong><p id="decoded"></p>
-<p>「ヒントを表示」で最初のホームへ結果を送ります。読み取っただけでは回数は減りません。</p>
+<p>「ヒントを表示」を押すと、初めて見る問題は残り回数を1回使い、ホームでヒント画像が開きます。同じ問題の再表示では回数は減りません。</p>
 <a id="back" class="nav-action" href="#">ヒントを表示</a>
-<p class="tiny">画面が切り替わらない場合は、ブラウザのタブ一覧からホームを選んでください。</p>
+<p class="tiny">戻り先は班番号と残り回数が表示されるホームです。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
 </section>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
@@ -69,6 +69,27 @@ function status(text,isError=false){$('status').textContent=text;$('status').cla
 function errorModal(cause,detail){$('cause').textContent=cause;$('detail').textContent=detail;$('errorCopy').disabled=!lastValue;$('overlay').classList.remove('hidden');$('overlay').focus();}
 function closeModal(){$('overlay').classList.add('hidden');}
 async function stop(){if(!reader)return;let old=reader;reader=null;try{if(old.isScanning)await old.stop();}catch(e){}try{old.clear();}catch(e){}}
+// ホームが渡してきた班専用URLはハッシュから読み込む。クエリでは送信しない。
+function getHomeUrl(){
+ try{
+  const encoded=new URLSearchParams(location.hash.slice(1)).get('return');
+  if(!encoded)return null;
+  const url=new URL(encoded);
+  if(url.protocol!=='https:'||url.hostname!=='script.google.com'||
+    !/^\/macros\/s\/[^/]+\/exec$/.test(url.pathname)||
+    !/^(?:[A-H]-[1-6]|I-[1-3])$/.test(url.searchParams.get('team')||'')||
+    !/^[a-f0-9]{64}$/i.test(url.searchParams.get('key')||''))return null;
+  return url;
+ }catch(e){return null;}
+}
+function navigateHome(includeQuestion){
+ const home=getHomeUrl();
+ if(!home)return false;
+ home.searchParams.delete('question');
+ if(includeQuestion && lastValue)home.searchParams.set('question',lastValue);
+ location.assign(home.href);
+ return true;
+}
 function sendToHome(){
  if(!window.opener){errorModal('原因：ホームとのタブ接続がありません。','このブラウザはQRリーダーを開くとき、ホームとの接続情報（window.opener）を引き継いでいません。Google Apps Scriptの埋め込み表示・ブラウザのタブ保護設定などが考えられます。ブラウザのタブ一覧からホームに戻ってください。');return false;}
  try{if(window.opener.closed){errorModal('原因：ホームのタブが閉じています。','QRコードを送信する先がありません。班専用ログインQRからホームを開き直してください。');return false;}}
@@ -97,11 +118,19 @@ async function start(){
 }
 $('homeNav').addEventListener('click',event=>{
  event.preventDefault();
+ if(navigateHome(false))return;
  if(window.opener && !window.opener.closed){try{window.opener.focus();}catch(e){}return;}
- errorModal('ホームに切り替えられません','初期の別タブ方式に戻しています。ブラウザのタブ一覧から「班番号」「残り使用回数」「QRコードをスキャンする」があるホームを選んでください。');
+ errorModal('ホームのURLがありません','班専用QRからホームを開き、ホームの「QRコードをスキャンする」を押して起動してください。');
 });
 $('retry').addEventListener('click',start);
-$('back').addEventListener('click',event=>{event.preventDefault();if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームに送信しました。画面が切り替わらない場合はタブ一覧からホームを選んでください。');}});
+$('back').addEventListener('click',event=>{
+ event.preventDefault();
+ if(!lastValue)return;
+ // 「ヒントを表示」の操作でのみ問題ID付きのホームURLへ移動する。
+ if(navigateHome(true))return;
+ // 古いホームで開いたケースは互換性のため送信だけ試みる。
+ if(sendToHome()){try{window.opener.focus();}catch(e){}status('ホームへ問題コードを送信しました。');}
+});
 async function copy(){try{await navigator.clipboard.writeText(lastValue);closeModal();status('問題コードをコピーしました。');}catch(e){errorModal('原因：問題コードをコピーできません。','クリップボードへのアクセスが拒否されました。読み取った問題は「'+lastValue+'」です。');}}
 $('copy').addEventListener('click',copy);$('errorCopy').addEventListener('click',copy);$('errorClose').addEventListener('click',closeModal);
 window.addEventListener('pagehide',()=>{void stop();});window.addEventListener('load',start);
