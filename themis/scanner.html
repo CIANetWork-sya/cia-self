@@ -42,10 +42,10 @@ a.nav-action{display:flex;align-items:center;justify-content:center;width:100%;m
 <h1>問題のQRコードを読み取る</h1>
 <p>カメラをQRコードに向けると、自動で読み取ります。写真を撮る必要はありません。</p>
 <section id="result" class="hidden">
-<strong>読み取り完了</strong><p id="decoded"></p>
-<p>「ヒントを表示」で元のTHEMIS画面に戻り、ヒントの使用を確認してください。読み取っただけでは回数は減りません。</p>
+<strong>読み取り完了</strong>
+<p>「ヒントを表示」で元の画面に戻り、ヒントの使用を確認してください。読み取っただけでは回数は減りません。</p>
 <a id="back" class="nav-action" href="#">ヒントを表示</a>
-<p class="tiny">自動で切り替わらない場合は、ブラウザのタブ一覧から元のTHEMIS画面を選んでください。</p>
+<p class="tiny">自動で切り替わらない場合は、ブラウザのタブ一覧から元の画面を選んでください。</p>
 <button id="copy" class="secondary" type="button">問題コードをコピー</button>
 </section>
 <div id="status" class="status" role="status" aria-live="polite">カメラを準備しています…</div>
@@ -69,7 +69,7 @@ async function stop(){if(!reader)return;const current=reader;reader=null;try{if(
 function sendToThemis(){if(window.opener&&!window.opener.closed){window.opener.postMessage({type:'THEMIS_QR_SCANNED',value:lastValue},'*');return true;}return false;}
 async function start(){
  if(busy)return;busy=true;scanned=false;lastValue='';
- $('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').disabled=true;$('retry').textContent='カメラを準備中…';$('result').classList.add('hidden');$('decoded').textContent='';
+ $('reader').classList.remove('hidden');$('status').classList.remove('hidden');$('retry').disabled=true;$('retry').textContent='カメラを準備中…';$('result').classList.add('hidden');
  status('カメラを起動しています…');
  try{
   if(typeof Html5Qrcode==='undefined')throw Error('QR読み取りライブラリを読み込めませんでした。');
@@ -85,10 +85,10 @@ async function start(){
     if(!m){status('THEMISの問題用QRコードではありません。別のコードを映してください。',true);return;}
     scanned=true;lastValue='THEMIS:Q'+m[1];await stop();
     $('reader').classList.add('hidden');$('status').classList.add('hidden');
-    $('retry').classList.remove('hidden');$('result').classList.remove('hidden');$('decoded').textContent='読み取った問題：'+lastValue;
+    $('retry').classList.remove('hidden');$('result').classList.remove('hidden');
     window.scrollTo({top:0,behavior:'smooth'});
     const sent=sendToThemis();
-    status(sent?'読み取り成功。元のTHEMIS画面に問題を送りました。':'読み取り成功。元のTHEMIS画面に戻ってください。');
+    status(sent?'読み取り成功。元の画面に問題を送りました。':'読み取り成功。元の画面に戻ってください。');
    };
   try {
     await reader.start({facingMode:'environment'},config,onDecoded,()=>{});
@@ -112,8 +112,8 @@ async function start(){
 $('retry').addEventListener('click',start);
 $('back').addEventListener('click',event=>{event.preventDefault();
  const sent=sendToThemis();
- if(sent){try{window.opener.focus();}catch(e){}try{window.close();}catch(e){}status('元のTHEMIS画面に戻ってヒントの使用を確認してください。');}
- else status('元のTHEMISタブに戻ってください。タブ間連携が利用できない場合は運営スタッフに確認してください。',true);
+ if(sent){try{window.opener.focus();}catch(e){}try{window.close();}catch(e){}status('元の画面に戻ってヒントの使用を確認してください。');}
+ else status('元のタブに戻ってください。タブ間連携が利用できない場合は運営スタッフに確認してください。',true);
 });
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(lastValue);status('問題コードをコピーしました。');}catch(e){status('コピーに失敗しました。表示された問題コードを長押ししてコピーしてください。',true);}});
 window.addEventListener('pagehide',()=>{void stop();});
